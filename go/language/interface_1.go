@@ -4,6 +4,7 @@ import "fmt"
 
 // --------------
 // Valueless type
+// 没有值的类型
 // --------------
 
 // reader is an interface that defines the act of reading data.
@@ -12,6 +13,9 @@ import "fmt"
 // It is a 2 word data structure that has 2 pointers.
 // When we say var r reader, we would have a nil value interface because interface is a reference
 // type.
+// Reader 是定义读取数据行为的接口。
+// 接口严格来说是无值类型，这个接口不声明状态。
+// 接口定义了一种约定的行为，通过约定的行为实现多态
 type reader interface {
 	read(b []byte) (int, error) // (1)
 
@@ -25,10 +29,20 @@ type reader interface {
 	// backing array for that slice has to be an allocation. But if we stick with (1), the caller
 	// is allocating a slice. Even the backing array for that is ended up on a heap, it is just 1
 	// allocation. We can call this 10000 times and it is still 1 allocation.
+	// interface 与 API 有所不同：
+	// 技术上，我可以这说：你想让我读多少byte，然后我返回一个byte切片和一个error，
+	// 像这样：read(i int) ([]byte, error)	(2)
+	// 为什么我们选择了(1)这种方式呢?
+	// 每次调用(2)，它都产生内存分配的开销，因为这个方法(method)分配一个由未知类型组成的切片并将这个切片共享回调用栈
+	// 这个切片的支撑数组也会有内存分配
+	// 但我们使用(1),就由调用者对slice进行分配
+	// 即使slice的支撑数组在堆上的生命周期结束了，也只会产生一次分配
+	// 我们可以调用10000 次，但只产生一次分配
 }
 
 // -------------------------------
 // Concrete type vs Interface type
+// 具体类型与接口类型
 // -------------------------------
 
 // A concrete type is any type that can have a method. Only user defined type can have a method.
@@ -38,17 +52,28 @@ type reader interface {
 // the reader interface. Because of this, we can say the concrete type file implements the reader
 // interface using a value receiver.
 // There is no fancy syntax. The compiler can automatically recognize the implementation here.
+// 具体类型是任何可以有方法的类型。只有用户定义的类型才可以有方法。
+// 方法允许一段数据主要围绕接口公开功能。
+// file 定义为系统文件结构体
+// 它是一个具体的类型，因为它具有下面的read方法
+// 这与接口reder中的方法完全一样
+
+// 在go中，函数（function）与方法（method）是有区别的
+// 函数是指不属于任何结构体、类型的方法，也就是说，函数是没有接收者的；
+// 而方法是有接收者的，我们说的方法要么是属于一个结构体的，要么属于一个新定义的类型的。
 
 // ------------
 // Relationship
 // ------------
 
 // We store concrete type values inside interfaces.
+// 在接口里存储实体类型的值
 type file struct {
 	name string
 }
 
 // read implements the reader interface for a file.
+// read 实现了file的reader接口
 func (file) read(b []byte) (int, error) {
 	s := "<rss><channel><title>Going Go Programming</title></channel></rss>"
 	copy(b, s)
@@ -59,11 +84,13 @@ func (file) read(b []byte) (int, error) {
 // This is the second concrete type that uses a value receiver.
 // We now have two different pieces of data, both exposing the reader's contract and implementation
 // for this contract.
+// pipe 定义了一个名为pipe的网络连接
 type pipe struct {
 	name string
 }
 
 // read implements the reader interface for a network connection.
+// read 实现了pipe网络连接的reader接口
 func (pipe) read(b []byte) (int, error) {
 	s := `{name: "hoanh", title: "developer"}`
 	copy(b, s)
@@ -72,6 +99,7 @@ func (pipe) read(b []byte) (int, error) {
 
 func main() {
 	// Create two values one of type file and one of type pipe.
+	// 创建file和pipe的实例
 	f := file{"data.json"}
 	p := pipe{"cfg_service"}
 
@@ -87,6 +115,8 @@ func main() {
 	// - The first part describes the type of value being stored. In our case, it is the file value.
 	// - The second part gives us a matrix of function pointers so we can actually execute the
 	// right method when we call that through the interface.
+	// 为每个具体类型调用检索函数。这里我们传递的是值本身，这意味着要传递的是 f 的一个副本跨越程序边界。
+	// 
 
 	//       reader           iTable
 	//    -----------        --------
